@@ -1,9 +1,11 @@
 """
 config.py
 =========
-Single source of truth for SST-IDS hyperparameters, dataset paths, and run
-settings. The values defined here are the values the code uses and the ones
-reported as the model's hyperparameter configuration.
+Central configuration for SST-IDS hyperparameters, dataset paths, and run
+settings. The defaults below define the larger default training schedule. The
+paper's Table 5 reports a reduced reproduction budget, which ``reproduce.py``
+applies and regenerates Table 5 from for fast, exact reproduction; the values
+used for any given run are whatever ``model_cfg``/``run_cfg`` are passed.
 
 The defaults below are starting points for a feature-token Transformer on tabular
 network-flow data and are light enough to train on a 4 GB GPU (or CPU). Tune them
@@ -16,7 +18,7 @@ from pathlib import Path
 # ----------------------------------------------------------------------------
 # Paths -- point DATA_DIR at the folder that contains the CSV files you shared.
 # ----------------------------------------------------------------------------
-DATA_DIR = Path("./Datsets")          # folder with the CIC/UNSW/TON CSVs
+DATA_DIR = Path("./Datsets")          # folder with the CIC/UNSW CSVs
 OUTPUT_DIR = Path("./outputs")        # metrics, figures, saved models land here
 
 # CIC-IDS-2017 day-wise files (MachineLearningCVE / "ISCX" flow CSVs).
@@ -32,7 +34,6 @@ CIC_FILES = {
 }
 UNSW_TRAIN = "UNSW_NB15_training-set.csv"
 UNSW_TEST  = "UNSW_NB15_testing-set.csv"
-TON_FILE   = "ton-iot.csv"
 
 # Per-file sample sizes (None = use all rows). Mirrors the per-dataset sampling described in the paper
 # but is fully explicit and reproducible. Lower these for quick smoke runs.
@@ -82,7 +83,6 @@ class RunConfig:
     # top-k features kept after RF-SHAP ranking, per dataset.
     top_k_cic: int     = 15
     top_k_unsw: int    = 12
-    top_k_ton: int     = 5
     # categorical encoding: "label" (single numeric token) or "onehot".
     categorical_encoding: str = "label"
     # exclude identifier/port-like columns.
@@ -94,36 +94,57 @@ MODEL = ModelConfig()
 RUN = RunConfig()
 
 # Identity / non-behavioral columns to drop when drop_identity_features=True.
-# NOTE: the flow CSVs you use have NO source/destination IP columns; CIC keeps
-# only "Destination Port" and UNSW has none, so this mainly affects TON-IoT.
+# NOTE: the flow CSVs used here have NO source/destination IP columns; CIC keeps
+# only "Destination Port" and UNSW has none.
 IDENTITY_COLUMNS = {
     "cic":  ["Destination Port"],
     "unsw": [],
-    "ton":  ["ts", "src_ip", "dst_ip", "src_port", "dst_port"],
 }
 
 
-def hyperparameter_table_rows():
-    """Return (name, value) rows describing the hyperparameter configuration."""
-    m = asdict(MODEL)
-    pretty = {
-        "input_representation": "Input representation",
-        "embed_dim": "Embedding dimension",
-        "n_heads": "Number of attention heads",
-        "n_encoder_blocks": "Number of Transformer encoder blocks",
-        "ff_hidden_dim": "Feed-forward hidden dimension",
-        "dropout": "Dropout rate",
-        "mask_rate": "Masking rate",
-        "optimizer": "Optimizer",
-        "learning_rate": "Learning rate",
-        "batch_size": "Batch size",
-        "pretrain_epochs": "Number of pretraining epochs",
-        "finetune_epochs": "Number of fine-tuning epochs",
-        "classification_activation": "Classification activation",
-        "ssl_loss": "Self-supervised loss",
-        "supervised_loss": "Supervised classification loss",
-    }
-    return [(pretty[k], m[k]) for k in pretty]
+def hyperparameter_table_rows(model_cfg=None, run_cfg=None, seeds=None, sample=None):
+    """Return (name, value) rows describing the hyperparameter configuration.
+
+    Pass the model_cfg / run_cfg actually used for a run (e.g. the reduced
+    budget in reproduce.py) so the generated table matches what was trained.
+    `seeds` may be an int, a sequence, or a {dataset: [seeds]} mapping; `sample`
+    is the per-run stratified sample size (None -> "full")."""
+    m = asdict(model_cfg if model_cfg is not None else MODEL)
+    r = asdict(run_cfg if run_cfg is not None else RUN)
+
+    if seeds is None:
+        seed_str = str(r["n_seeds"])
+    elif isinstance(seeds, dict):
+        _names = {"unsw": "UNSW-NB15", "cic": "CIC-IDS-2017"}
+        seed_str = ", ".join(f"{len(v)} ({_names.get(k, k.upper())})" for k, v in seeds.items())
+    else:
+        seed_str = str(len(seeds))
+
+    tr = round((1 - r["test_size"]) * (1 - r["val_size"]) * 100)
+    va = round((1 - r["test_size"]) * r["val_size"] * 100)
+    te = round(r["test_size"] * 100)
+
+    return [
+        ("Input representation", m["input_representation"]),
+        ("Embedding dimension (d_model)", m["embed_dim"]),
+        ("Number of attention heads", m["n_heads"]),
+        ("Number of Transformer encoder blocks", m["n_encoder_blocks"]),
+        ("Feed-forward hidden dimension", m["ff_hidden_dim"]),
+        ("Dropout rate", m["dropout"]),
+        ("Masking rate", m["mask_rate"]),
+        ("Optimizer", f'{m["optimizer"].capitalize()} (weight decay {m["weight_decay"]})'),
+        ("Learning rate", m["learning_rate"]),
+        ("Gradient clipping (max norm)", m["grad_clip"]),
+        ("Batch size", m["batch_size"]),
+        ("Number of pretraining epochs", m["pretrain_epochs"]),
+        ("Number of fine-tuning epochs", m["finetune_epochs"]),
+        ("Train/validation/test split", f"{tr}%/{va}%/{te}%"),
+        ("Repeated runs (random seeds)", seed_str),
+        ("Samples per run (stratified)", sample if sample is not None else "full"),
+        ("Classification activation", m["classification_activation"]),
+        ("Self-supervised loss", m["ssl_loss"]),
+        ("Supervised classification loss", m["supervised_loss"]),
+    ]
 
 
 if __name__ == "__main__":

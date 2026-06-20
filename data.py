@@ -10,8 +10,6 @@ IDS datasets, matched to the EXACT column layout of the CSVs in Datsets.zip:
                     protocol column; only "Destination Port" is port-like.
   * UNSW-NB15     : *_training-set.csv / *_testing-set.csv with proto/service/
                     state categoricals, attack_cat, and a 0/1 "label".
-  * TON-IoT       : ton-iot.csv (only 19 rows here) with src_ip/dst_ip/src_port/
-                    dst_port plus a 0/1 "label" and a "type" column.
 
 Everything is reproducible: preprocessing is fit on the training split only and
 re-applied to validation/test/transfer to avoid leakage.
@@ -128,27 +126,6 @@ def load_unsw(which="train", random_state=0):
 
 
 # ---------------------------------------------------------------------------
-# TON-IoT  (use a representative subset; very small samples are not meaningful)
-# ---------------------------------------------------------------------------
-_TON_DROP = ["type"]          # 'type' is the multiclass attack label; drop for binary
-_TON_CATEGORICAL = ["proto", "service", "conn_state"]
-
-
-def load_ton(random_state=0):
-    path = C.DATA_DIR / C.TON_FILE
-    df, label_col = _read_csv_clean(path, ["label", "Label"])
-    y = df[label_col].astype(int)
-    drop = _TON_DROP + [label_col]
-    if C.RUN.drop_identity_features:
-        drop += C.IDENTITY_COLUMNS["ton"]
-    X = df.drop(columns=[c for c in drop if c in df.columns], errors="ignore")
-    if len(X) < 100:
-        warnings.warn(f"TON-IoT has only {len(X)} rows; metrics are NOT statistically "
-                      "meaningful. Use a representative TON-IoT subset or drop it.")
-    return X.reset_index(drop=True), y.reset_index(drop=True)
-
-
-# ---------------------------------------------------------------------------
 # Preprocessing: encode categoricals + z-score scale (fit on TRAIN only)
 # ---------------------------------------------------------------------------
 class Preprocessor:
@@ -240,8 +217,7 @@ def select_features_rf_shap(X_df, y, top_k, random_state=0, max_shap_rows=1000):
 # ---------------------------------------------------------------------------
 def cats_and_topk(dataset):
     return {"cic": ([], C.RUN.top_k_cic),
-            "unsw": (_UNSW_CATEGORICAL, C.RUN.top_k_unsw),
-            "ton": (_TON_CATEGORICAL, C.RUN.top_k_ton)}[dataset]
+            "unsw": (_UNSW_CATEGORICAL, C.RUN.top_k_unsw)}[dataset]
 
 
 def prepare_split(X, y, cats, top_k, seed=0):
@@ -284,8 +260,6 @@ def prepare_within_dataset(dataset, seed=0, sample_per_file=None):
         X, y = load_cic_pooled(sample_per_file, random_state=seed)
     elif dataset == "unsw":
         X, y = load_unsw("train", random_state=seed)
-    elif dataset == "ton":
-        X, y = load_ton(random_state=seed)
     else:
         raise ValueError(dataset)
     cats, top_k = cats_and_topk(dataset)
