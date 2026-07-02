@@ -56,7 +56,8 @@ def main():
     out = C.OUTPUT_DIR; out.mkdir(parents=True, exist_ok=True)
 
     # Table 5
-    write_table(pd.DataFrame(C.hyperparameter_table_rows(), columns=["Hyperparameter", "Value"]),
+    write_table(pd.DataFrame(C.hyperparameter_table_rows(cfg, C.RUN, SEEDS, SAMPLE),
+                             columns=["Hyperparameter", "Value"]),
                 str(out / "table5_hyperparameters"),
                 "SST-IDS hyperparameter settings.", "tab:hyperparameters")
 
@@ -120,8 +121,14 @@ def main():
                 "Params (MB)": "--"})
         write_table(pd.DataFrame(rows), str(out / "deployment_cost"),
                     "Per-flow inference latency and model size.", "tab:deployment_cost")
-        P.shap_analysis(model, prep["X_train"], prep["X_test"], prep["features"],
-                        dev, str(out / "cic"), y_true=prep["y_test"])
+        imp = P.shap_analysis(model, prep["X_train"], prep["X_test"], prep["features"],
+                              dev, str(out / "cic"), y_true=prep["y_test"])
+        if imp is not None:
+            write_table(pd.DataFrame({"feature": prep["features"], "mean_abs_shap": imp})
+                        .sort_values("mean_abs_shap", ascending=False),
+                        str(out / "table10_shap_global"),
+                        "Global SHAP feature importances over the selected behavioral features.",
+                        "tab:shap_results")
 
     print(f"\nDone. Tables and figures in {out.resolve()}")
 
