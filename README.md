@@ -1,4 +1,4 @@
-# SST-IDS: A Self-Supervised Transformer Framework for Explainable Intrusion Detection
+# Self-Supervised Transformers versus Gradient-Boosted Trees for Flow-Based Intrusion Detection: A Reproducible Empirical Study
 
 Reference implementation of SST-IDS, a two-stage intrusion-detection framework
 for tabular network-flow data:
