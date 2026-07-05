@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.DS_Store
+# data and run artifacts
+Datasets/
+data/
+outputs/
+*.pkl
+*.pt
+*.csv
+!real_results/*.csv

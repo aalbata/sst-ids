@@ -1,0 +1,11 @@
+# SST-IDS — Python 3.10+
+# Install:  pip install -r requirements.txt
+# (For GPU PyTorch, follow https://pytorch.org/get-started/locally/ for your CUDA.)
+torch>=2.1
+numpy>=1.24
+pandas>=2.0
+scikit-learn>=1.3
+scipy>=1.10
+xgboost>=2.0
+shap>=0.44
+matplotlib>=3.7
